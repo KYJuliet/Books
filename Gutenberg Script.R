@@ -3,6 +3,7 @@ library(tidyr)
 library(tidytext)
 library(ggplot2)
 library(gutenbergr)
+library(data.table)
 
 
 
@@ -27,14 +28,12 @@ temp_2 <- data.frame(table(temp_1$gutenberg_bookshelf)) %>%
   filter(Freq > 100) %>%
   arrange(desc(Freq))
 
-###
-
 download_list <- temp_1 %>%
   filter(gutenberg_bookshelf == "Bestsellers, American, 1895-1923") %>%
   filter(author != "Churchill, Winston") %>%
   filter(author != "Parker, Gilbert") %>%
   select(gutenberg_id)
-  
+
 books <- gutenberg_download(download_list, strip = TRUE)
 
 write.csv(books, file = "books.csv")
@@ -69,24 +68,33 @@ temp_4 <- temp_2 %>%
   group_by(gutenberg_id) %>%
   filter(!(gutenberg_id %in% c(19506, 19513, 19515, 19574, 19796)))
 
+#download the books from project gutenberg, strip = TRUE is a function that attempts to strip out headers and foots
 books <- gutenberg_download(temp_4, strip = TRUE)
 
+#write the file as a csv to the wd
 write.csv(books, file = "books.csv")
 
 
 
-#---------------------#
-###### OLD SCRIPT #####
-#---------------------#
+#----------------------#
+###### PREPARATION #####
+#----------------------#
 
-df <- read.csv("books.csv", header = TRUE, sep = ",", stringsAsFactors = FALSE)
+### ...Preparing Data ###
+
+df <- fread("books.csv", sep = ",", header = TRUE)
+#turns out 16 million lines of text may be a little much for later analysis with my 8gb of RAM
+#lets cut it in about half (spoiler: turns out we're still 284.9mb short with only 8 million lines)
+#books <- books %>%
+#  filter(gutenberg_id < median(gutenberg_id))
+books <- df[sample(nrow(df), ceiling(0.1*nrow(df)), replace = FALSE), ]
 
 #creating a new unique id var that is seperate from the gutenberg_id variable
-id_table <- data.frame(unique(df$gutenberg_id)) %>%
+id_table <- data.frame(unique(books$gutenberg_id)) %>%
   mutate(book_id = row_number()) %>%
-  rename(gutenberg_id = unique.df.gutenberg_id.)
+  rename(gutenberg_id = unique.books.gutenberg_id.)
 
-books <- df %>%
+books <- books %>%
   select(gutenberg_id, text) %>%
   filter( text != "") %>%
   
@@ -113,13 +121,19 @@ books <- df %>%
 words <- books %>%
   group_by(word) %>%
   summarize(avg_posn = mean(posn), n = n()) %>%
-  filter(n > 1350) %>%
+  filter(n > 100) %>%
   arrange(desc(avg_posn))
 
-head(words, 10)
-tail(words, 10)
+head(words, 20)
+tail(words, 20)
+
+words_decile_1 <- books %>%
+  filter(posn_decile == 0.1) %>%
+  select(word)
+words_decile_1 <- data.frame(table(words_decile_1)) %>%
+  arrange(desc(Freq))
 
 #boxplot of frequencies of 'words$n' (the count of number of instances of each word in 'books')
 ggplot(data = words, aes(x = "", y = n)) +
   geom_boxplot() +
-  coord_cartesian(ylim = c(0, 20))
+  coord_cartesian(ylim = c(0, 1500))

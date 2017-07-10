@@ -109,13 +109,57 @@ books <- books %>%
   arrange(book_id) %>%
   
   #unnesting the individual words
-  unnest_tokens(word, text) %>%
+  unnest_tokens(word_raw, text) %>%
   
   #creating a new var for the word's position in it's book (identified with book_id)
   group_by(book_id) %>%
   mutate(posn = row_number()/n()) %>%
   mutate(posn_decile = ceiling(posn * 10)/10) %>%
   ungroup()
+
+#getting rid of the many underscores ("_") that seem to have replaced spaces in the text
+#doesn't seem to work in the orignal call to create 'books' for unknown reason
+books_2 <- books %>%
+  mutate(word = gsub("_", "", books$word_raw)) %>%
+  select(-word_raw)
+
+
+
+
+
+
+#create a list of words used in each decile, words used in multiple deciles will duplicate
+words_across_deciles <- data.frame()
+for (i in 1:10) {
+  words_decile_temp <- books_2 %>%
+    filter(posn_decile == 0 + 0.1*i) %>%
+    select(word) %>%
+    table() %>%
+    data.frame() %>%
+    arrange(desc(Freq))
+  words_across_deciles <- rbind(words_across_deciles, words_decile_temp)
+}
+colnames(words_across_deciles) <- c("word", "Freq")
+words_across_deciles$word <- toString(words_across_deciles$word)
+rm(words_decile_temp)
+
+
+#count use of words accross deciles
+words_across_deciles_count <- table(words_across_deciles$word) %>%
+  data.frame() %>%
+  arrange(desc(Freq))
+
+ggplot(data = words_across_deciles_count, aes(x = "", y = Freq)) +
+  geom_boxplot() +
+  coord_cartesian(ylim = c(0, 8))
+
+temp_1 <- words_across_deciles_count %>%
+  filter(Freq == 5) %>%
+  arrange(desc(Freq))
+
+
+
+
 
 #finding the mean position of each word and its number of occurences from 'books'
 words <- books %>%
@@ -127,11 +171,10 @@ words <- books %>%
 head(words, 20)
 tail(words, 20)
 
-words_decile_1 <- books %>%
-  filter(posn_decile == 0.1) %>%
-  select(word)
-words_decile_1 <- data.frame(table(words_decile_1)) %>%
-  arrange(desc(Freq))
+
+
+
+
 
 #boxplot of frequencies of 'words$n' (the count of number of instances of each word in 'books')
 ggplot(data = words, aes(x = "", y = n)) +

@@ -87,7 +87,7 @@ df <- fread("books.csv", sep = ",", header = TRUE)
 #lets cut it in about half (spoiler: turns out we're still 284.9mb short with only 8 million lines)
 #books <- books %>%
 #  filter(gutenberg_id < median(gutenberg_id))
-books <- df[sample(nrow(df), ceiling(0.1*nrow(df)), replace = FALSE), ]
+books <- df[df$gutenberg_id %in% sample(df$gutenberg_id, 0.005*length(unique(df$gutenberg_id)), replace = FALSE), ]
 
 #creating a new unique id var that is seperate from the gutenberg_id variable
 id_table <- data.frame(unique(books$gutenberg_id)) %>%
@@ -122,11 +122,16 @@ books <- books %>%
 books_2 <- books %>%
   mutate(word = gsub("_", "", books$word_raw)) %>%
   select(-word_raw)
+rm(books)
+rm(df)
+rm(id_table)
+gc()
 
 
 
-
-
+#-------------------#
+##### ANALYSIS ######
+#-------------------#
 
 #create a list of words used in each decile, words used in multiple deciles will duplicate
 words_across_deciles <- data.frame()
@@ -140,9 +145,9 @@ for (i in 1:10) {
   words_across_deciles <- rbind(words_across_deciles, words_decile_temp)
 }
 colnames(words_across_deciles) <- c("word", "Freq")
-words_across_deciles$word <- toString(words_across_deciles$word)
+words_across_deciles$word <- as.character(words_across_deciles$word)
 rm(words_decile_temp)
-
+gc()
 
 #count use of words accross deciles
 words_across_deciles_count <- table(words_across_deciles$word) %>%
@@ -162,10 +167,10 @@ temp_1 <- words_across_deciles_count %>%
 
 
 #finding the mean position of each word and its number of occurences from 'books'
-words <- books %>%
+words <- books_2 %>%
   group_by(word) %>%
   summarize(avg_posn = mean(posn), n = n()) %>%
-  filter(n > 100) %>%
+  filter(n > 1000) %>%
   arrange(desc(avg_posn))
 
 head(words, 20)

@@ -1,3 +1,4 @@
+library(plyr)
 library(dplyr)
 library(tidyr)
 library(tidytext)
@@ -84,44 +85,71 @@ write.csv(books, file = "books.csv")
 
 df <- fread("books.csv", sep = ",", header = TRUE)
 #turns out 16 million lines of text may be a little much for later analysis with my 8gb of RAM
-#lets cut it in about half (spoiler: turns out we're still 284.9mb short with only 8 million lines)
-#books <- books %>%
-#  filter(gutenberg_id < median(gutenberg_id))
-books <- df[sample(nrow(df), ceiling(0.1*nrow(df)), replace = FALSE), ]
+#lets cut it in about half down to a 5% sample of book id's
+books <- sample(unique(df$gutenberg_id), 0.01*length(unique(df$gutenberg_id)), replace = FALSE) %>%
+  data.frame() %>%
+  rename(gutenberg_id = ".")
+books <- left_join(books, df) %>%
+  select(gutenberg_id, text)
 
-#creating a new unique id var that is seperate from the gutenberg_id variable
-id_table <- data.frame(unique(books$gutenberg_id)) %>%
-  mutate(book_id = row_number()) %>%
-  rename(gutenberg_id = unique.books.gutenberg_id.)
 
 books <- books %>%
   select(gutenberg_id, text) %>%
-  filter( text != "") %>%
+  filter(text != "") %>%
   
   #saving a variable for the line number of each word
   group_by(gutenberg_id) %>%
   mutate(line = row_number()) %>%
   ungroup() %>%
-  
-  #matching unique id for the table from 'id_table', seperate from gutenberg_id
-  full_join(id_table, by = "gutenberg_id") %>%
-  select(book_id, gutenberg_id, line, text) %>%
-  arrange(book_id) %>%
+  arrange(gutenberg_id) %>%
   
   #unnesting the individual words
   unnest_tokens(word_raw, text) %>%
   
   #creating a new var for the word's position in it's book (identified with book_id)
-  group_by(book_id) %>%
+  group_by(gutenberg_id) %>%
   mutate(posn = row_number()/n()) %>%
-  mutate(posn_decile = ceiling(posn * 10)/10) %>%
-  ungroup()
+  mutate(posn_decile = ntile(posn, n = 10)) %>%
+  ungroup() 
 
 #getting rid of the many underscores ("_") that seem to have replaced spaces in the text
 #doesn't seem to work in the orignal call to create 'books' for unknown reason
 books_2 <- books %>%
   mutate(word = gsub("_", "", books$word_raw)) %>%
   select(-word_raw)
+books <- books_2
+rm(books_2)
+#rm(df)
+gc()
+
+#getting total word frequencies
+words <- books %>%
+  group_by(word) %>%
+  summarise(freq = n()) %>%
+  data.frame() %>%
+  ungroup %>%
+  arrange(desc(freq))
+
+#getting total word decile frequencies (number of deciles the word appears in)
+words_decile <- books %>%
+  select(word, posn_decile) %>%
+  group_by(word, posn_decile) %>%
+  filter(row_number() == 1) %>%
+  group_by(word) %>%
+  summarise(n = n()) %>%
+  data.frame() %>%
+  ungroup() %>%
+  arrange(desc(n))
+
+
+
+
+
+
+#-----------------#
+##### SANDBOX #####
+#-----------------#
+
 
 
 
@@ -129,33 +157,28 @@ books_2 <- books %>%
 
 
 #create a list of words used in each decile, words used in multiple deciles will duplicate
-words_across_deciles <- data.frame()
+words <- data.frame()
 for (i in 1:10) {
-  words_decile_temp <- books_2 %>%
-    filter(posn_decile == 0 + 0.1*i) %>%
+  words_decile_temp <- books %>%
+    filter(posn_decile == i) %>%
     select(word) %>%
     table() %>%
     data.frame() %>%
     arrange(desc(Freq))
-  words_across_deciles <- rbind(words_across_deciles, words_decile_temp)
+  words <- rbind(words, words_decile_temp)
 }
-colnames(words_across_deciles) <- c("word", "Freq")
-words_across_deciles$word <- toString(words_across_deciles$word)
+colnames(words) <- c("word", "Freq")
+words$word <- as.character(words$word)
 rm(words_decile_temp)
 
-
 #count use of words accross deciles
-words_across_deciles_count <- table(words_across_deciles$word) %>%
-  data.frame() %>%
-  arrange(desc(Freq))
+word_count <- words %>%
+  group_by(word) %>%
+  summarise( Freq = n())
 
-ggplot(data = words_across_deciles_count, aes(x = "", y = Freq)) +
+ggplot(data = words_count, aes(x = "", y = Freq)) +
   geom_boxplot() +
   coord_cartesian(ylim = c(0, 8))
-
-temp_1 <- words_across_deciles_count %>%
-  filter(Freq == 5) %>%
-  arrange(desc(Freq))
 
 
 
@@ -175,8 +198,12 @@ tail(words, 20)
 
 
 
-
 #boxplot of frequencies of 'words$n' (the count of number of instances of each word in 'books')
 ggplot(data = words, aes(x = "", y = n)) +
   geom_boxplot() +
   coord_cartesian(ylim = c(0, 1500))
+
+temp_1 <- data.frame()
+for (i in 1:10) {
+  temp_1[i,1] <- nrow(books[books$word == "the" & books$posn_decile == 0 + 0.1*i,])
+}

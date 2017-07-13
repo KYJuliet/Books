@@ -86,7 +86,7 @@ write.csv(books, file = "books.csv")
 df <- fread("books.csv", sep = ",", header = TRUE)
 #turns out 16 million lines of text may be a little much for later analysis with my 8gb of RAM
 #lets cut it in about half down to a 5% sample of book id's
-books <- sample(unique(df$gutenberg_id), 0.01*length(unique(df$gutenberg_id)), replace = FALSE) %>%
+books <- sample(unique(df$gutenberg_id), 0.1*length(unique(df$gutenberg_id)), replace = FALSE) %>%
   data.frame() %>%
   rename(gutenberg_id = ".")
 books <- left_join(books, df) %>%
@@ -119,7 +119,7 @@ books_2 <- books %>%
   select(-word_raw)
 books <- books_2
 rm(books_2)
-#rm(df)
+rm(df)
 gc()
 
 #getting total word frequencies
@@ -150,6 +150,28 @@ words_decile <- books %>%
 ##### SANDBOX #####
 #-----------------#
 
+
+
+words_decile <- books %>%
+  group_by(word, posn_decile) %>%
+  summarise(freq = n()) %>%
+  data.frame() %>%
+  ungroup %>%
+  arrange(desc(freq))
+words <- books %>%
+  group_by(word) %>%
+  summarise(freq = n()) %>%
+  arrange(desc(freq)) %>%
+  filter(freq > 1000)
+words_data <- words_decile %>%
+  group_by(word) %>%
+  summarise(min = min(freq), 
+            median = median(freq), 
+            max = max(freq),
+            freq = n(),
+            split = (max - min)/(freq*median)) %>%
+  arrange(desc(split)) %>%
+  inner_join(words, by = "word")
 
 
 

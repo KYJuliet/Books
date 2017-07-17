@@ -14,7 +14,7 @@ library(data.table)
 ##### EXPLORATION #####
 #---------------------#
 
-### ...Attempt 1 ####
+#### ...Attempt 1 ####
 
 #pull all book metadata that is english and has text (can be downloaded from project gutenberg)
 temp_1 <- gutenberg_metadata %>%
@@ -41,7 +41,7 @@ write.csv(books, file = "books.csv")
 
 
 
-### ...Attempt 2 ####
+#### ...Attempt 2 ####
 
 temp_1 <- gutenberg_metadata %>%
   filter(language == "en", has_text == TRUE)
@@ -81,7 +81,7 @@ write.csv(books, file = "books.csv")
 ###### PREPARATION #####
 #----------------------#
 
-### ...Preparing Data ###
+#### ...Preparing Data ####
 
 df <- fread("books.csv", sep = ",", header = TRUE)
 #turns out 16 million lines of text may be a little much for later analysis with my 8gb of RAM
@@ -141,8 +141,17 @@ words_decile <- books %>%
   ungroup() %>%
   arrange(desc(n))
 
+#### ...Preparing AFINN ####
 
+#let's pull the afinn lexicon of sentiments from the 'sentiments' dataset that comes with tidytext
+afinn <- sentiments %>%
+  filter(lexicon == "AFINN") %>%
+  select(word, sentiment = score)
 
+#and now let's add the sentiment to the books dataset
+books <- books %>%
+  left_join(afinn, by = "word") %>%
+  arrange(gutenberg_id)
 
 
 
@@ -165,13 +174,26 @@ words <- books %>%
   filter(freq > 1000)
 words_data <- words_decile %>%
   group_by(word) %>%
+  mutate(z = (freq - min(freq))/(max(freq)-min(freq))) %>%
   summarise(min = min(freq), 
             median = median(freq), 
             max = max(freq),
-            freq = n(),
-            split = (max - min)/(freq*median)) %>%
-  arrange(desc(split)) %>%
-  inner_join(words, by = "word")
+            sd = sd(z),
+            freq = n()) %>%
+  inner_join(words, by = "word") %>%
+  arrange(desc(sd))
+
+words_temp <- words_decile[words_decile$word == "change",]
+
+ggplot(data = words_temp, aes(x = posn_decile, y = freq)) +
+       geom_histogram(stat = "identity")
+
+
+
+
+
+
+
 
 
 

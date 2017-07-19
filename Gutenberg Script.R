@@ -160,7 +160,7 @@ books <- books %>%
 #-----------------#
 
 
-
+#setting up words to be graphed on their frequency over ten deciles
 words_decile <- books %>%
   group_by(word, posn_decile) %>%
   summarise(freq = n()) %>%
@@ -191,8 +191,12 @@ ggplot(data = words_temp, aes(x = posn_decile, y = freq)) +
 
 
 
-
-
+#setting up graphing of sentiment across ten deciles for all books together
+books_decile_sentiment <- books %>%
+  group_by(posn_decile) %>%
+  summarise(avg_sentiment = mean(sentiment, na.rm = TRUE))
+ggplot(books_decile_sentiment, aes(x = posn_decile, y = avg_sentiment)) +
+  geom_histogram(stat = "identity")
 
 
 
